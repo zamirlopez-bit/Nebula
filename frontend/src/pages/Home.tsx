@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import AuthShell from "../components/AuthShell";
+import DashboardShell from "../components/DashboardShell";
 import { get, patch, post, type AccountType, type Session } from "../lib/api";
 
 type Relationship = { id: string; subject_user_id: string; related_user_id: string; relationship_type: string; authority_basis: string; status: string; created_at: string };
@@ -57,12 +58,21 @@ const profileConfig: Partial<Record<AccountType, { title: string; description: s
   }
 };
 
+const fieldLimits: Record<string, number> = {
+  display_name: 100, pronouns: 40, preferred_environment: 1000, phone: 40,
+  preferred_language: 60, availability: 500, notes: 1000, professional_title: 120,
+  institution_name: 180, institution_email: 254, professional_bio: 1500
+};
+
 export default function Home({ session, onLogout }: { session: Session; onLogout: () => void }) {
+  const [section, setSection] = useState<"overview" | "profile" | "network">("overview");
   const accountType = session.user.accountType;
   const config = useMemo(() => accountType ? profileConfig[accountType] : null, [accountType]);
   const [profile, setProfile] = useState<Profile>({});
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [profileLoadError, setProfileLoadError] = useState("");
+  const [dashboardBusy, setDashboardBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -97,16 +107,18 @@ export default function Home({ session, onLogout }: { session: Session; onLogout
   }, [session.accessToken]);
 
   async function submitEmotion(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setDashboardMessage("");
+    event.preventDefault(); if (dashboardBusy) return; setDashboardBusy(true); setDashboardMessage("");
     const result = await post<{entry:any}>("/dashboard/emotions", { emotion, intensity:Number(intensity), note:emotionNote }, session.accessToken);
     if (result.ok) { setEmotionNote(""); setDashboardMessage("Registro emocional guardado."); const fresh=await get<any>("/dashboard",session.accessToken); if(fresh.ok)setDashboard(fresh.data); }
     else setDashboardMessage(result.message);
+    setDashboardBusy(false);
   }
   async function submitObservation(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setDashboardMessage("");
+    event.preventDefault(); if (dashboardBusy) return; setDashboardBusy(true); setDashboardMessage("");
     const result = await post<{observation:any}>("/dashboard/observations", { studentId:observationStudent, content:observationText, visibility:"authorized_team" }, session.accessToken);
     if (result.ok) { setObservationText(""); setDashboardMessage("Observación guardada."); const fresh=await get<any>("/dashboard",session.accessToken); if(fresh.ok)setDashboard(fresh.data); }
     else setDashboardMessage(result.message);
+    setDashboardBusy(false);
   }
 
   useEffect(() => {
@@ -116,7 +128,7 @@ export default function Home({ session, onLogout }: { session: Session; onLogout
       const result = await get<{ profile: Profile | null }>("/profiles/me", session.accessToken);
       if (!active) return;
       if (!result.ok) {
-        setError(result.message);
+        setProfileLoadError(result.message);
       } else {
         const current = result.data.profile ?? {};
         setProfile(current);
@@ -156,7 +168,7 @@ export default function Home({ session, onLogout }: { session: Session; onLogout
     setConsentBusy(true);
     const result = await post(`/access/consents/${relationshipId}/revoke`, {}, session.accessToken);
     setDashboardMessage(result.ok ? "Permisos revocados. El acceso compartido queda bloqueado." : result.message);
-    if (result.ok) { await refreshAccess(); await refreshRelationships(); }
+    if (result.ok) { await refreshAccess(); await refreshRelationships(); const fresh = await get<any>("/dashboard", session.accessToken); if (fresh.ok) setDashboard(fresh.data); }
     setConsentBusy(false);
   }
 
@@ -180,7 +192,7 @@ export default function Home({ session, onLogout }: { session: Session; onLogout
     setRelationshipBusy(true); setRelationshipMessage("");
     const result = await post<{ relationship: Relationship }>(`/relationships/${id}/respond`, { action }, session.accessToken);
     setRelationshipMessage(result.ok ? "La vinculación se actualizó." : result.message);
-    if (result.ok) await refreshRelationships();
+    if (result.ok) { await refreshRelationships(); await refreshAccess(); const fresh = await get<any>("/dashboard", session.accessToken); if (fresh.ok) setDashboard(fresh.data); }
     setRelationshipBusy(false);
   }
 
@@ -212,27 +224,27 @@ export default function Home({ session, onLogout }: { session: Session; onLogout
   }
 
   return (
-    <AuthShell title={`Hola, ${session.user.fullName ?? session.user.email}`} subtitle="Bienvenido a tu espacio de Nébula.">
+    <DashboardShell name={session.user.fullName ?? session.user.email} role={accountType} section={section} onSection={setSection} onLogout={onLogout}>
       <section className="profile-dashboard">
-        <section className="profile-next-step">
+        <section className="profile-next-step dashboard-overview" hidden={section !== "overview"} aria-label="Resumen de tu espacio">
           <span className="profile-kicker">PANEL DE CONTROL · {accountType === "autistic_person" ? "PERSONAL" : accountType === "parent_guardian" ? "FAMILIAR" : accountType === "teacher" ? "DOCENTE" : "ADMINISTRACIÓN"}</span>
           <h2>{accountType === "autistic_person" ? "Mi bienestar" : accountType === "parent_guardian" ? "Personas a mi cuidado" : accountType === "teacher" ? "Mi espacio educativo" : "Administración de Nébula"}</h2>
           {dashboardError && <p className="error" role="alert">{dashboardError}</p>}
           {!dashboard && !dashboardError && <p className="muted">Cargando información autorizada…</p>}
           {dashboard?.role === "autistic_person" && <>
             <div className="dashboard-stats"><article><strong>{dashboard.data.emotions.length}</strong><span>registros emocionales recientes</span></article><article><strong>{dashboard.data.plans.length}</strong><span>planes de apoyo</span></article><article><strong>{dashboard.data.alerts.filter((a:any)=>a.status === "open").length}</strong><span>alertas abiertas</span></article></div>
-            <form className="profile-form" onSubmit={submitEmotion}><h3>¿Cómo te sientes hoy?</h3><label className="field"><span>Emoción</span><select value={emotion} onChange={e=>setEmotion(e.target.value)}>{["alegría","calma","tristeza","ansiedad","enojo","frustración","cansancio","saturación","otro"].map(v=><option key={v}>{v}</option>)}</select></label><label className="field"><span>Intensidad: {intensity}/5</span><input type="range" min="1" max="5" value={intensity} onChange={e=>setIntensity(e.target.value)}/></label><label className="field"><span>Nota (opcional)</span><textarea value={emotionNote} onChange={e=>setEmotionNote(e.target.value)} maxLength={1000}/></label><button type="submit">Guardar cómo me siento</button></form>
-            <h3>Mi historial reciente</h3>{dashboard.data.emotions.map((e:any)=><article className="relationship-item" key={e.id}><strong>{e.emotion}</strong> · intensidad {e.intensity}/5 <small>{new Date(e.created_at).toLocaleString()}</small>{e.note && <p>{e.note}</p>}</article>)}
-            <h3>Mis planes de apoyo</h3>{dashboard.data.plans.map((p:any)=><article className="relationship-item" key={p.id}><strong>{p.title}</strong><p>{p.goals}</p><small>{p.status}</small></article>)}
-            <h3>Alertas</h3>{dashboard.data.alerts.map((a:any)=><article className="relationship-item" key={a.id}><strong>{a.summary}</strong><p>{a.details}</p><small>{a.severity} · {a.status}</small></article>)}
+            <form className="profile-form" onSubmit={submitEmotion}><h3>¿Cómo te sientes hoy?</h3><label className="field"><span>Emoción</span><select value={emotion} onChange={e=>setEmotion(e.target.value)}>{["alegría","calma","tristeza","ansiedad","enojo","frustración","cansancio","saturación","otro"].map(v=><option key={v}>{v}</option>)}</select></label><label className="field"><span>Intensidad: {intensity}/5</span><input type="range" min="1" max="5" value={intensity} onChange={e=>setIntensity(e.target.value)}/></label><label className="field"><span>Nota (opcional)</span><textarea value={emotionNote} onChange={e=>setEmotionNote(e.target.value)} maxLength={1000}/></label><button type="submit" disabled={dashboardBusy}>{dashboardBusy ? "Guardando…" : "Guardar cómo me siento"}</button></form>
+            <h3>Mi historial reciente</h3>{dashboard.data.emotions.length === 0 && <p className="empty-state">Tu historia empieza a tu ritmo. Aquí verás las emociones que decidas registrar.</p>}{dashboard.data.emotions.map((e:any)=><article className="relationship-item" key={e.id}><strong>{e.emotion}</strong> · intensidad {e.intensity}/5 <small>{new Date(e.created_at).toLocaleString()}</small>{e.note && <p>{e.note}</p>}</article>)}
+            <h3>Mis planes de apoyo</h3>{dashboard.data.plans.length === 0 && <p className="empty-state">Aún no tienes planes de apoyo registrados.</p>}{dashboard.data.plans.map((p:any)=><article className="relationship-item" key={p.id}><strong>{p.title}</strong><p>{p.goals}</p><small>{p.status}</small></article>)}
+            <h3>Avisos de apoyo</h3>{dashboard.data.alerts.length === 0 && <p className="empty-state">No hay avisos de apoyo registrados.</p>}{dashboard.data.alerts.map((a:any)=><article className="relationship-item" key={a.id}><strong>{a.summary}</strong><p>{a.details}</p><small>{a.severity} · {a.status}</small></article>)}
           </>}
           {(dashboard?.role === "parent_guardian" || dashboard?.role === "teacher") && <>
             <div className="dashboard-stats"><article><strong>{dashboard.data.students.length}</strong><span>personas con acceso autorizado</span></article><article><strong>{dashboard.data.observations.length}</strong><span>observaciones visibles</span></article><article><strong>{dashboard.data.alerts.length}</strong><span>alertas autorizadas</span></article></div>
             {dashboard.data.students.length === 0 && <p className="muted">Aún no hay personas vinculadas con permisos activos. El acceso aparecerá cuando se complete la autorización correspondiente.</p>}
             <h3>Personas vinculadas</h3>{dashboard.data.students.map((st:any)=><article className="relationship-item" key={st.id}><strong>{st.display_name || st.full_name || "Perfil"}</strong><small>Información limitada a los permisos concedidos.</small></article>)}
-            {dashboard.role === "teacher" && dashboard.data.students.length>0 && <form className="profile-form" onSubmit={submitObservation}><h3>Registrar observación educativa</h3><label className="field"><span>Estudiante</span><select required value={observationStudent} onChange={e=>setObservationStudent(e.target.value)}><option value="">Selecciona</option>{dashboard.data.students.map((st:any)=><option key={st.id} value={st.id}>{st.display_name || st.full_name}</option>)}</select></label><label className="field"><span>Observación</span><textarea required maxLength={4000} value={observationText} onChange={e=>setObservationText(e.target.value)}/></label><button>Guardar observación</button></form>}
-            <h3>Observaciones autorizadas</h3>{dashboard.data.observations.map((o:any)=><article className="relationship-item" key={o.id}><strong>{o.category}</strong><p>{o.content}</p><small>{o.observation_date}</small></article>)}
-            <h3>Planes de apoyo e informes</h3>{[...dashboard.data.plans,...dashboard.data.reports].map((p:any)=><article className="relationship-item" key={p.id}><strong>{p.title}</strong><small>{p.status}</small></article>)}
+            {dashboard.role === "teacher" && dashboard.data.students.length>0 && <form className="profile-form" onSubmit={submitObservation}><h3>Registrar observación educativa</h3><label className="field"><span>Estudiante</span><select required value={observationStudent} onChange={e=>setObservationStudent(e.target.value)}><option value="">Selecciona</option>{dashboard.data.students.map((st:any)=><option key={st.id} value={st.id}>{st.display_name || st.full_name}</option>)}</select></label><label className="field"><span>Observación</span><textarea required maxLength={4000} value={observationText} onChange={e=>setObservationText(e.target.value)}/></label><button disabled={dashboardBusy}>{dashboardBusy ? "Guardando…" : "Guardar observación"}</button></form>}
+            <h3>Observaciones autorizadas</h3>{dashboard.data.observations.length === 0 && <p className="empty-state">Aquí aparecerán las observaciones que tengas permiso para consultar.</p>}{dashboard.data.observations.map((o:any)=><article className="relationship-item" key={o.id}><strong>{o.category}</strong><p>{o.content}</p><small>{o.observation_date}</small></article>)}
+            <h3>Planes de apoyo e informes</h3>{dashboard.data.plans.length + dashboard.data.reports.length === 0 && <p className="empty-state">Aún no hay planes o informes disponibles para tu cuenta.</p>}{[...dashboard.data.plans,...dashboard.data.reports].map((p:any)=><article className="relationship-item" key={p.id}><strong>{p.title}</strong><small>{p.status}</small></article>)}
             <h3>Alertas autorizadas</h3>{dashboard.data.alerts.map((a:any)=><article className="relationship-item" key={a.id}><strong>{a.summary}</strong><small>{a.severity} · {a.status}</small></article>)}
           </>}
           {dashboard?.role === "admin" && <><div className="dashboard-stats"><article><strong>{dashboard.data.users.length}</strong><span>usuarios recientes</span></article><article><strong>{dashboard.data.institutions.length}</strong><span>instituciones</span></article><article><strong>{dashboard.data.relationships.length}</strong><span>vinculaciones</span></article></div><h3>Usuarios</h3>{dashboard.data.users.map((u:any)=><article className="relationship-item" key={u.id}><strong>{u.display_name || u.full_name}</strong><small>{u.role} · {u.created_at?.slice(0,10)}</small></article>)}<h3>Instituciones</h3>{dashboard.data.institutions.map((i:any)=><article className="relationship-item" key={i.id}><strong>{i.name}</strong><small>{i.verification_status} · {i.active ? "Activa" : "Inactiva"}</small></article>)}<h3>Vinculaciones</h3>{dashboard.data.relationships.map((r:any)=><article className="relationship-item" key={r.id}><strong>{r.relationship_label || r.relationship_type}</strong><small>{r.status} · {r.authority_basis}</small></article>)}</>}
@@ -241,9 +253,9 @@ export default function Home({ session, onLogout }: { session: Session; onLogout
             <p>Revisa qué vinculaciones tienen acceso a tu información. Revocar un permiso corta el acceso compartido correspondiente.</p>
             {consents.length === 0 ? <p className="muted">No hay permisos de seguimiento activos.</p> : consents.map((c:any) => <article className="relationship-item" key={c.id}>
               <strong>Vinculación {String(c.relationship_id).slice(0, 8)}</strong>
-              <p>{(c.scopes ?? []).join(" · ")}</p>
+              <p>{(c.scopes ?? []).map((scope: string) => ({ emotional_data: "Emociones", observations: "Observaciones", reports: "Informes", support_plans: "Planes de apoyo", alerts: "Avisos" }[scope] ?? scope)).join(" · ")}</p><small>Estado: {c.revoked_at ? "Revocado" : c.expires_at && new Date(c.expires_at).getTime() <= Date.now() ? "Vencido" : "Activo"}</small>
               <small>{c.expires_at ? `Expira ${new Date(c.expires_at).toLocaleString()}` : "Sin fecha de expiración"}</small>
-              <button className="link" type="button" disabled={consentBusy} onClick={() => void revokeConsent(c.relationship_id)}>Revocar permisos</button>
+              <button className="link" type="button" disabled={consentBusy || Boolean(c.revoked_at)} onClick={() => void revokeConsent(c.relationship_id)}>Revocar permisos</button>
             </article>)}
           </section>}
           {dashboard?.role === "teacher" && <section className="relationship-panel">
@@ -251,12 +263,12 @@ export default function Home({ session, onLogout }: { session: Session; onLogout
             {teacherAccess.length === 0 ? <p className="muted">Todavía no tienes solicitudes de acceso registradas.</p> : teacherAccess.map((a:any) => <article className="relationship-item" key={a.id}>
               <strong>Estudiante {String(a.student_user_id).slice(0, 8)}</strong>
               <p>{(a.scopes ?? []).join(" · ")}</p>
-              <small>Estado: {a.status} · Institución: {a.institutional_approval_status} · Plataforma: {a.platform_approval_status}</small>
+              <small>Estado: {a.status === "approved" ? "Aprobado" : a.status === "pending" ? "Pendiente" : a.status} · Institución: {a.institution_approved_at ? "Aprobado" : "Pendiente"} · Plataforma: {a.platform_approved_at ? "Aprobado" : "Pendiente"}</small>
             </article>)}
           </section>}
           {dashboardMessage && <p role="status">{dashboardMessage}</p>}
         </section>
-        {config && <><div className="profile-heading">
+        {config && <><section className="dashboard-profile" hidden={section !== "profile"} aria-label="Mi perfil"><div className="profile-heading">
           <span className="profile-kicker">ESPACIO PERSONAL</span>
           <h2>{config.title}</h2>
           <p>{config.description}</p>
@@ -264,8 +276,8 @@ export default function Home({ session, onLogout }: { session: Session; onLogout
         {accountType === "teacher" && (
           <p className="profile-status">Estado de verificación: <strong>{profile.verification_status ?? "Pendiente"}</strong></p>
         )}
-        {loading ? <p className="muted">Cargando tu perfil…</p> : (
-          <form className="profile-form" onSubmit={saveProfile}>
+        {loading ? <p className="muted">Cargando tu perfil…</p> : profileLoadError ? <p className="error" role="alert">{profileLoadError} Vuelve a entrar a tu espacio para cargar el perfil.</p> : (
+          <form className="profile-form profile-editor" onSubmit={saveProfile}>
             {[...new Set(config.fields.map((field) => field.section))].map((section) => (
               <fieldset className="profile-fieldset" key={section}>
                 <legend>{section}</legend>
@@ -273,14 +285,14 @@ export default function Home({ session, onLogout }: { session: Session; onLogout
                   <label className="field" key={field.name}>
                     <span>{field.label}</span>
                     {field.kind === "textarea" ? (
-                      <textarea value={values[field.name] ?? ""} onChange={(event) => setValues((old) => ({ ...old, [field.name]: event.target.value }))} rows={3} maxLength={2000} />
+                      <textarea value={values[field.name] ?? ""} onChange={(event) => setValues((old) => ({ ...old, [field.name]: event.target.value }))} rows={3} maxLength={fieldLimits[field.name] ?? 2000} />
                     ) : field.kind === "select" ? (
                       <select value={values[field.name] ?? ""} onChange={(event) => setValues((old) => ({ ...old, [field.name]: event.target.value }))}>
                         <option value="">Selecciona una opción</option>
                         {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                       </select>
                     ) : (
-                      <input value={values[field.name] ?? ""} onChange={(event) => setValues((old) => ({ ...old, [field.name]: event.target.value }))} maxLength={field.name === "institution_email" ? 254 : 2000} />
+                      <input type={field.name === "institution_email" ? "email" : field.name === "phone" ? "tel" : "text"} value={values[field.name] ?? ""} onChange={(event) => setValues((old) => ({ ...old, [field.name]: event.target.value }))} maxLength={fieldLimits[field.name] ?? 2000} />
                     )}
                     <small>{field.help}</small>
                   </label>
@@ -292,8 +304,8 @@ export default function Home({ session, onLogout }: { session: Session; onLogout
             <button type="submit" disabled={saving}>{saving ? "Guardando…" : "Guardar perfil"}</button>
           </form>
         )}
-        <section className="profile-next-step relationship-panel">
-          <h3>Vinculaciones familiares</h3>
+        </section><section className="profile-next-step relationship-panel" hidden={section !== "network"} aria-label="Mi red de apoyo">
+          <h2>Mi red de apoyo</h2><p>Las conexiones empiezan con tu autorización. Puedes revisar los vínculos y sus permisos.</p>
           {accountType === "autistic_person" && <>
             <p>Genera un código temporal para que tu familiar pueda solicitar una vinculación. Tú decides si autorizas el acceso al seguimiento.</p>
             <button type="button" disabled={relationshipBusy} onClick={() => void generateInvite()}>{relationshipBusy ? "Procesando…" : "Generar código de vinculación"}</button>
@@ -309,20 +321,19 @@ export default function Home({ session, onLogout }: { session: Session; onLogout
             </form>
           </>}
           {relationshipMessage && <p role="status">{relationshipMessage}</p>}
-          <h4>Solicitudes y vinculaciones</h4>
+          {accountType === "teacher" && <p>Consulta el estado de tus autorizaciones institucionales en el resumen. Una cuenta docente por sí sola no concede acceso a estudiantes.</p>}<h4>Solicitudes y vinculaciones</h4>
           {relationships.length === 0 ? <p className="muted">Todavía no tienes vinculaciones.</p> : relationships.map((item) => {
             const isSubject = item.subject_user_id === session.user.id;
             return <article className="relationship-item" key={item.id}>
               <p><strong>{isSubject ? "Solicitud recibida" : "Solicitud enviada"}</strong> · {item.relationship_type} · {item.status === "active" ? "Activa" : item.status === "pending" ? "Pendiente" : item.status === "rejected" ? "Rechazada" : "Revocada"}</p>
               <small>{item.authority_basis === "legal_representation" ? "Representación legal: pendiente de verificación administrativa." : "Consentimiento de la persona titular."}</small>
-              {item.status === "pending" && isSubject && item.authority_basis === "subject_consent" && <div className="relationship-actions"><button type="button" disabled={relationshipBusy} onClick={() => void respondRelationship(item.id, "accept")}>Aceptar</button><button type="button" disabled={relationshipBusy} onClick={() => void respondRelationship(item.id, "reject")}>Rechazar</button></div>}
+              {item.status === "pending" && isSubject && item.authority_basis === "subject_consent" && <div className="relationship-actions"><p>Al aceptar, compartes emociones, observaciones, informes, planes de apoyo y avisos. Puedes revocar estos permisos.</p><button type="button" disabled={relationshipBusy} onClick={() => void respondRelationship(item.id, "accept")}>Aceptar y compartir</button><button type="button" disabled={relationshipBusy} onClick={() => void respondRelationship(item.id, "reject")}>Rechazar</button></div>}
               {(item.status === "active" || item.status === "pending") && <button className="link" type="button" disabled={relationshipBusy} onClick={() => void respondRelationship(item.id, "revoke")}>Revocar</button>}
             </article>;
           })}
         </section>
         </>}
-        <button className="link" type="button" onClick={onLogout}>Cerrar sesión</button>
       </section>
-    </AuthShell>
+    </DashboardShell>
   );
 }

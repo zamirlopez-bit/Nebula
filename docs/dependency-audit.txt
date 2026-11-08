@@ -1,0 +1,55 @@
+frontend
+{
+  "vulnerabilities": {
+    "info": 0,
+    "low": 0,
+    "moderate": 3,
+    "high": 1,
+    "critical": 0,
+    "total": 4
+  },
+  "dependencies": {
+    "prod": 11,
+    "dev": 111,
+    "optional": 51,
+    "peer": 0,
+    "peerOptional": 0,
+    "total": 121
+  }
+}
+esbuild | moderate | rango: <=0.24.2
+  esbuild enables any website to send any requests to the development server and read the response | https://github.com/advisories/GHSA-67mh-4wv8-2f99
+react-router | moderate | rango: 6.0.0 - 7.17.0
+  React Router: Open redirect via backslash in <Link> and useNavigate (CVE-2025-68470 bypass) | https://github.com/advisories/GHSA-wrjc-x8rr-h8h6
+  React Router: Arbitrary Constructor Injection via deserializeErrors() in React Router SSR Hydration | https://github.com/advisories/GHSA-337j-9hxr-rhxg
+react-router-dom | moderate | rango: 6.0.0-alpha.0 - 7.17.0
+vite | high | rango: <=6.4.3
+  Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling | https://github.com/advisories/GHSA-4w7w-66w2-5vf9
+  launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows | https://github.com/advisories/GHSA-v6wh-96g9-6wx3
+  launch-editor: escapeCmdArgs() omits % escaping on Windows | https://github.com/advisories/GHSA-698v-4r3x-3vcv
+  launch-editor: Editor CLI flag misinterpretation causing arbitrary command execution for some editors | https://github.com/advisories/GHSA-r825-w8mm-5pxw
+  launch-editor: `fs.existsSync()` existence check can be bypassed on Windows | https://github.com/advisories/GHSA-587h-7wmj-h5pm
+  Vite: Cross origin script execution through Vite custom middleware | https://github.com/advisories/GHSA-9jrq-w75r-8gcw
+  Vite: Files outside `server.fs.allow` could be served when project paths match system paths on non-Windows machine | https://github.com/advisories/GHSA-rq7h-c2jc-7f22
+  vite: `server.fs.deny` bypass on Windows alternate paths | https://github.com/advisories/GHSA-fx2h-pf6j-xcff
+backend
+{
+  "vulnerabilities": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 1,
+    "critical": 0,
+    "total": 1
+  },
+  "dependencies": {
+    "prod": 84,
+    "dev": 44,
+    "optional": 27,
+    "peer": 0,
+    "peerOptional": 0,
+    "total": 127
+  }
+}
+zod | high | rango: <4.6.6
+  Zod can exhaust memory while validating oversized constrained collections | https://github.com/advisories/GHSA-mrhx-c7xc-m3w5

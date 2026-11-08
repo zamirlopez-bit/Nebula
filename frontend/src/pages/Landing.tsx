@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import Logo from "../components/Logo";
+import CalmLandscape from "../components/CalmLandscape";
 
 const principles = [
   {
@@ -91,38 +92,9 @@ export default function Landing({ signedIn }: { signedIn: boolean }) {
             </div>
           </div>
 
-          <div className="hero-art octopus-stage" aria-label="Pulpo minimalista, símbolo de Nébula">
-            <div className="octopus-halo" aria-hidden="true" />
-            <div className="octopus-caption caption-top"><span className="caption-dot" /> Cercanía y confianza</div>
-            <svg className="hero-octopus" viewBox="0 0 520 500" role="img" aria-labelledby="octopus-title octopus-desc">
-              <title id="octopus-title">El pulpo de Nébula</title>
-              <desc id="octopus-desc">Un pulpo minimalista de líneas violetas, con una expresión amable y tentáculos curvos.</desc>
-              <defs>
-                <linearGradient id="octopusHead" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stopColor="#8063f4" />
-                  <stop offset="1" stopColor="#6243df" />
-                </linearGradient>
-              </defs>
-              <g className="octopus-tentacles" fill="none" stroke="#6d4bea" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M190 282 C150 300 116 325 104 367 C95 398 111 419 139 408 C157 401 163 383 166 369" />
-                <path d="M211 300 C186 337 177 373 190 414 C200 445 229 448 241 423 C248 408 242 392 238 379" />
-                <path d="M238 307 C228 353 236 393 262 426 C281 450 309 439 310 413 C311 396 300 383 289 371" />
-                <path d="M268 300 C281 337 306 363 342 376 C371 387 390 366 377 342 C369 327 352 324 337 323" />
-                <path d="M294 278 C333 288 372 282 400 255 C422 234 408 207 382 212 C365 215 357 231 350 244" />
-                <path d="M308 250 C347 234 372 205 377 169 C381 140 354 128 337 148 C326 161 330 179 334 194" />
-                <path d="M280 228 C302 190 303 151 283 119 C267 94 239 104 239 131 C239 148 251 160 261 171" />
-                <path d="M235 226 C217 187 185 163 148 162 C119 161 109 188 132 205 C146 215 164 209 178 203" />
-              </g>
-              <path d="M172 237 C172 166 210 119 263 119 C316 119 352 166 352 237 C352 286 315 318 262 318 C209 318 172 286 172 237Z" fill="url(#octopusHead)" />
-              <ellipse cx="229" cy="235" rx="10" ry="13" fill="#fff" />
-              <ellipse cx="296" cy="235" rx="10" ry="13" fill="#fff" />
-              <path d="M244 268 C255 280 270 280 281 268" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" />
-              <circle cx="201" cy="260" r="8" fill="#f6a18b" opacity=".9" />
-              <circle cx="324" cy="260" r="8" fill="#f6a18b" opacity=".9" />
-            </svg>
-            <div className="octopus-caption caption-bottom"><span className="caption-lock">✳</span> Siempre bajo tu control</div>
-            <span className="octopus-spark spark-one" aria-hidden="true">✳</span>
-            <span className="octopus-spark spark-two" aria-hidden="true">✦</span>
+          <div className="landscape-stage">
+            <CalmLandscape />
+            <p className="landscape-caption">Tu espacio. Tu ritmo. Tus decisiones.</p>
           </div>
         </section>
 
